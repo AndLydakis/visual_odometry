@@ -28,6 +28,7 @@ OpticalFlow::OpticalFlow(ros::NodeHandle nh, std::string image_topic, std::strin
                                   -7.422126200315807e-19, -0.0002818370786240783, 0.5159999728202818,
                                   1.683477982667922e-19, 5.30242624981192e-18, 1};
         H_ = cv::Mat(3, 3, CV_64F, &HData[0]);
+        previous_timestamp_ = ros::Time::now().toSec();
         filter_.reserve(filter_size_);
         for (int i = 0; i < filter_size_; ++i) {
             filter_[i] = geometry_msgs::Twist();
@@ -38,6 +39,7 @@ OpticalFlow::OpticalFlow(ros::NodeHandle nh, std::string image_topic, std::strin
             filter_[i].angular.y = 0.0;
             filter_[i].angular.z = 0.0;
         }
+        filter_counter_ = 0;
 
     } catch (const ros::Exception &re) {
         std::cerr << "ROS error: " << re.what() << std::endl;
@@ -57,28 +59,29 @@ OpticalFlow::~OpticalFlow() {
 }
 
 void OpticalFlow::imageCallback(const sensor_msgs::ImageConstPtr &image) {
-    std::cout << "Enter Image Callback\n";
+//    std::cout << "Enter Image Callback\n";
     try {
-        std::cout << "Create grayscale image\n";
-        cv::Mat greyscale_image;
+//        std::cout << "Create grayscale image\n";
         cv::Mat color_image_ = (cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8))->image;
-        cv::cvtColor(color_image_, greyscale_image, CV_BGR2GRAY);
-        if (!prev_.data) {
-            greyscale_image.copyTo(prev_);
+        cv::cvtColor(color_image_, current_image_, CV_BGR2GRAY);
+        if (!previous_image_.data) {
+            current_image_.copyTo(previous_image_);
             return;
         }
-        std::cout << "Calculate new set of points if there are not enough from previous image\n";
+//        std::cout << "Calculate new set of points if there are not enough from previous image\n";
         if (prev_track_indices_.size() < dropped_threshold_ * max_points_) {
-            cv::goodFeaturesToTrack(prev_, prev_track_indices_, max_points_, 0.1, 5.0);
+            cv::goodFeaturesToTrack(previous_image_, prev_track_indices_, max_points_, 0.1, 5.0);
         }
         if (prev_track_indices_.empty()) {
-            curr_.copyTo(prev_);
+            current_image_.copyTo(previous_image_);
             return;
         };
-        previous_timestamp_ = ros::Time::now().toSec();
-        std::cout << "Calculate optical flow\n";
-        cv::calcOpticalFlowPyrLK(prev_, curr_, prev_track_indices_, curr_track_indices_, flow_status_, flow_errors_,
+
+//        std::cout << "Calculate optical flow\n";
+        cv::calcOpticalFlowPyrLK(previous_image_, current_image_, prev_track_indices_, curr_track_indices_,
+                                 flow_status_, flow_errors_,
                                  cv::Size(21, 21), 4);
+//        std::cout << "Calculate motion estimate";
         cv::Point3f estimated_motion = feature_motion_estimate(prev_track_indices_, curr_track_indices_);
         accumulated_motion_ += estimated_motion;
         std::cout << "Estimated Motion so Far: " << accumulated_motion_.x << ", Rotation:"
@@ -98,7 +101,8 @@ void OpticalFlow::imageCallback(const sensor_msgs::ImageConstPtr &image) {
         double t_diff = current_timestamp_ - previous_timestamp_;
         twist_msg.linear.x = estimated_motion.y / t_diff;
         twist_msg.angular.z = estimated_motion.x / (2 * M_PI * robot_radius_) * 2 * M_PI * rotation_constant_ / t_diff;
-
+//
+//        twist_msg.angular.z = estimated_motion.x / (2 * M_PI * 0.4485) * 2 * M_PI * 1.57 / (t_diff);
         filter_[filter_counter_] = twist_msg;
 
         twist_msg.linear.x = 0.0;
@@ -132,7 +136,7 @@ void OpticalFlow::imageCallback(const sensor_msgs::ImageConstPtr &image) {
 
         imshow(windowName_, draw_image);
         cv::waitKey(30);
-        curr_.copyTo(prev_);
+        current_image_.copyTo(previous_image_);
         prev_track_indices_ = curr_track_indices_;
 
         auto first = prev_track_indices_.begin();
@@ -165,14 +169,14 @@ void OpticalFlow::imageCallback(const sensor_msgs::ImageConstPtr &image) {
         ROS_ERROR("Something went wrong");
         return;
     }
-    std::cout << "Exit Image Callback\n";
+//    std::cout << "Exit Image Callback\n";
 
 }
 
 cv::Point3f
 OpticalFlow::feature_motion_estimate(std::vector<cv::Point2f> &previous_coordinates,
                                      std::vector<cv::Point2f> &current_coordinates) {
-    std::cout << "Estimating Motion\n";
+//    std::cout << "Estimating Motion\n";
     std::vector<cv::Point3f> previous_homogeneous_points;
     cv::convertPointsToHomogeneous(previous_coordinates, previous_homogeneous_points);
     auto prev_it = previous_homogeneous_points.begin();
@@ -182,7 +186,7 @@ OpticalFlow::feature_motion_estimate(std::vector<cv::Point2f> &previous_coordina
 
     cv::Point3f average_motion(0.0, 0.0, 0.0);
 
-    std::cout << "Looping through points\n";
+//    std::cout << "Looping through points\n";
     for (; curr_it != current_homogeneous_points.end(); ++prev_it, ++curr_it) {
         average_motion += cv::Point3f((H_ * cv::Mat(*curr_it) - H_ * cv::Mat(*prev_it)));
         average_motion.x /= previous_homogeneous_points.size();
@@ -190,7 +194,7 @@ OpticalFlow::feature_motion_estimate(std::vector<cv::Point2f> &previous_coordina
         average_motion.z /= previous_homogeneous_points.size();
     }
     //?
-    std::cout << "Adjusting averaged motion\n";
+//    std::cout << "Adjusting averaged motion\n";
     average_motion.y *= -1.57 * 4.0 / 3.0;
     if ((fabs(average_motion.x) > deadband_) || (fabs(average_motion.y) > deadband_)) return average_motion;
     return cv::Point3f(0.0, 0.0, 0.0);
