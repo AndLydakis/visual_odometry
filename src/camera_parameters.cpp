@@ -139,11 +139,7 @@ CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
         !nodeHandle_.getParam("/camera_matrix/cols", cols) ||
         !nodeHandle_.getParam("/camera_matrix/data", data))
         throw std::runtime_error("Could not initialize camera calibration matrix");
-    std::cout << rows << " " << cols << std::endl;
-    data.resize(rows * cols);
-//    for (auto i : data) {
-//        std::cout << data[i] << std::endl;
-//    }
+
     camera_calibration_matrix_ = cv::Mat(rows, cols, CV_64F, &data[0]);
 
     std::vector<double> data2;
@@ -151,29 +147,27 @@ CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
         !nodeHandle_.getParam("/distortion_coefficients/cols", cols) ||
         !nodeHandle_.getParam("/distortion_coefficients/data", data2))
         throw std::runtime_error("Could not initialize camera distortion coefficients matrix");
-    std::cout << rows << " " << cols << std::endl;
-    data2.resize(rows * cols);
-    distortion_coefficients_ = cv::Mat(rows, cols, CV_64F, &data2[0]);
-    data2.clear();
+
+    distortion_coefficients_ = cv::Mat(rows, cols, CV_64F);
+    memcpy(distortion_coefficients_.data, data2.data(), data2.size() * sizeof(double));
 
     std::vector<double> data3;
     if (!nodeHandle_.getParam("/rectification_matrix/rows", rows) ||
         !nodeHandle_.getParam("/rectification_matrix/cols", cols) ||
         !nodeHandle_.getParam("/rectification_matrix/data", data3))
         throw std::runtime_error("Could not initialize rectification matrix");
-    std::cout << rows << " " << cols << std::endl;
-    std::cout <<data3.
+
     data3.resize(rows * cols);
-    rectification_matrix_ = cv::Mat(rows, cols, CV_64F, &data3[0]);
-    data3.clear();
+    rectification_matrix_ = cv::Mat(rows, cols, CV_64F);
+    memcpy(rectification_matrix_.data, data3.data(), data3.size() * sizeof(double));
 
     std::vector<double> data4;
     if (!nodeHandle_.getParam("/projection_matrix/rows", rows) ||
         !nodeHandle_.getParam("/projection_matrix/cols", cols) ||
         !nodeHandle_.getParam("/projection_matrix/data", data4))
         throw std::runtime_error("Could not initialize projection matrix");
-    std::cout << rows << " " << cols << std::endl;
     data4.resize(rows * cols);
-    projection_matrix_ = cv::Mat(rows, cols, CV_64F, &data4[0]);
-    data4.clear();
+//    projection_matrix_ = cv::Mat(rows, cols, CV_64F, &data4[0]);
+    projection_matrix_ = cv::Mat(rows, cols, CV_64F);
+    memcpy(projection_matrix_.data, data4.data(), data4.size() * sizeof(double));
 }
