@@ -1,0 +1,13 @@
+<launch>
+    <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" required="true">
+        <param name="image_width" value="640"/>
+        <param name="image_height" value="480"/>
+        <param name="pixel_format" value="yuyv"/>
+        <param name="camera_frame_id" value="usb_cam"/>
+        <param name="io_method" value="mmap"/>
+    </node>
+
+    <rosparam command="load" file="/home/lydakis/.ros/camera_info/head_camera.yaml"/>
+
+    <node name="visual_odom_node" pkg="visual_odometry" type="visual_odom_node" required="true" output="screen"/>
+</launch>

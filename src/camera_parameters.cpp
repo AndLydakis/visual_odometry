@@ -50,11 +50,11 @@ float CameraParameters::getTilt() {
     return tilt_degrees_;
 }
 
-float CameraParameters::getHeight() {
+int CameraParameters::getHeight() {
     return height_;
 }
 
-float CameraParameters::getWidth() {
+int CameraParameters::getWidth() {
     return width_;
 }
 
@@ -131,37 +131,49 @@ cv::Matx33d &CameraParameters::getWMatrix() {
 
 CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
     if (!nodeHandle_.getParam("/image_height", height_)) throw std::runtime_error("Could not read image height");
-    if (!nodeHandle_.getParam("/image_width", height_)) throw std::runtime_error("Could not read image width");
+    if (!nodeHandle_.getParam("/image_width", width_)) throw std::runtime_error("Could not read image width");
     int rows = 0;
     int cols = 0;
     std::vector<double> data;
     if (!nodeHandle_.getParam("/camera_matrix/rows", rows) ||
         !nodeHandle_.getParam("/camera_matrix/cols", cols) ||
         !nodeHandle_.getParam("/camera_matrix/data", data))
-        throw std::runtime_error("Could camera calibration matrix");
-
+        throw std::runtime_error("Could not initialize camera calibration matrix");
+    std::cout << rows << " " << cols << std::endl;
+    data.resize(rows * cols);
+//    for (auto i : data) {
+//        std::cout << data[i] << std::endl;
+//    }
     camera_calibration_matrix_ = cv::Mat(rows, cols, CV_64F, &data[0]);
 
+    std::vector<double> data2;
     if (!nodeHandle_.getParam("/distortion_coefficients/rows", rows) ||
         !nodeHandle_.getParam("/distortion_coefficients/cols", cols) ||
-        !nodeHandle_.getParam("/distortion_coefficients/data", data))
-        throw std::runtime_error("Could camera distortion coefficients matrix");
+        !nodeHandle_.getParam("/distortion_coefficients/data", data2))
+        throw std::runtime_error("Could not initialize camera distortion coefficients matrix");
+    std::cout << rows << " " << cols << std::endl;
+    data2.resize(rows * cols);
+    distortion_coefficients_ = cv::Mat(rows, cols, CV_64F, &data2[0]);
+    data2.clear();
 
-    distortion_coefficients_ = cv::Mat(rows, cols, CV_64F, &data[0]);
-
+    std::vector<double> data3;
     if (!nodeHandle_.getParam("/rectification_matrix/rows", rows) ||
         !nodeHandle_.getParam("/rectification_matrix/cols", cols) ||
-        !nodeHandle_.getParam("/rectification_matrix/data", data))
-        throw std::runtime_error("Could rectification matrix");
+        !nodeHandle_.getParam("/rectification_matrix/data", data3))
+        throw std::runtime_error("Could not initialize rectification matrix");
+    std::cout << rows << " " << cols << std::endl;
+    std::cout <<data3.
+    data3.resize(rows * cols);
+    rectification_matrix_ = cv::Mat(rows, cols, CV_64F, &data3[0]);
+    data3.clear();
 
-    rectification_matrix_ = cv::Mat(rows, cols, CV_64F, &data[0]);
-
+    std::vector<double> data4;
     if (!nodeHandle_.getParam("/projection_matrix/rows", rows) ||
         !nodeHandle_.getParam("/projection_matrix/cols", cols) ||
-        !nodeHandle_.getParam("/projection_matrix/data", data))
-        throw std::runtime_error("Could proejection matrix");
-
-    projection_matrix_ = cv::Mat(rows, cols, CV_64F, &data[0]);
-
-
+        !nodeHandle_.getParam("/projection_matrix/data", data4))
+        throw std::runtime_error("Could not initialize projection matrix");
+    std::cout << rows << " " << cols << std::endl;
+    data4.resize(rows * cols);
+    projection_matrix_ = cv::Mat(rows, cols, CV_64F, &data4[0]);
+    data4.clear();
 }

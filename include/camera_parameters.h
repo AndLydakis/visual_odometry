@@ -5,6 +5,9 @@
 #ifndef VISUAL_ODOM_CAMERA_PARAMETERS_H
 #define VISUAL_ODOM_CAMERA_PARAMETERS_H
 
+#define WIDTH 640
+#define HEIGHT 480
+
 #include <vector>
 #include "math.h"
 
@@ -13,7 +16,7 @@
 
 class CameraParameters {
 public:
-    CameraParameters(ros::NodeHandle nh, std::string calibration_file = "");
+    CameraParameters(ros::NodeHandle nh, std::string calibration_file);
 
     CameraParameters(ros::NodeHandle nh);
 
@@ -53,9 +56,9 @@ public:
 
     float getTilt();
 
-    float getHeight();
+    int getHeight();
 
-    float getWidth();
+    int getWidth();
 
     float getSubtensionHorizontal();
 
@@ -87,11 +90,11 @@ private:
     std::string image_topic_;
     std::string odom_topic_;
     std::string twist_topic_;
+    int height_;
+    int width_;
     float distance_from_center_;
     float distance_from_ground_;
     float tilt_degrees_;
-    float height_;
-    float width_;
     float subtension_vertical_m_;
     float subtension_horizontal_m_;
     cv::Matx33d camera_calibration_matrix_;
