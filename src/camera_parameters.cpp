@@ -1,5 +1,5 @@
 //
-// Created by andreas on 8/7/18.
+// Created by Andreas Lydakis on 8/7/18.
 //
 
 #include "../include/camera_parameters.h"
@@ -82,18 +82,6 @@ std::string CameraParameters::getCalibrationFile() {
     return calibration_file_;
 }
 
-void CameraParameters::setImageTopic(std::string image_topic) {
-    image_topic_ = image_topic;
-}
-
-void CameraParameters::setTwistTopic(std::string twist_topic) {
-    twist_topic_ = twist_topic;
-}
-
-void CameraParameters::setOdomTopic(std::string odom_topic) {
-    odom_topic_ = odom_topic;
-}
-
 void CameraParameters::setSubtensionHorizontal(float meters) {
     subtension_horizontal_m_ = meters >= 0 ? meters : 0;
 }
@@ -102,16 +90,9 @@ void CameraParameters::setSubtensionVertical(float meters) {
     subtension_vertical_m_ = meters >= 0 ? meters : 0;
 }
 
-CameraParameters::CameraParameters(ros::NodeHandle nh, std::string calibration_file) : nodeHandle_(nh),
-                                                                                       calibration_file_(
-                                                                                               calibration_file) {
-
-}
-
 cv::Mat &CameraParameters::getDistortionCoefficients() {
     return distortion_coefficients_;
 }
-
 
 cv::Mat &CameraParameters::getRectificationMatrix() {
     return rectification_matrix_;
@@ -123,10 +104,6 @@ cv::Mat &CameraParameters::getProjectionMatrix() {
 
 cv::Matx33d &CameraParameters::getCameraCalibrationMatrix() {
     return camera_calibration_matrix_;
-}
-
-cv::Matx33d &CameraParameters::getWMatrix() {
-    return W_;
 }
 
 CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
@@ -148,6 +125,7 @@ CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
         !nodeHandle_.getParam("/distortion_coefficients/data", data2))
         throw std::runtime_error("Could not initialize camera distortion coefficients matrix");
 
+    //Use memcpy for 2d matrices
     distortion_coefficients_ = cv::Mat(rows, cols, CV_64F);
     memcpy(distortion_coefficients_.data, data2.data(), data2.size() * sizeof(double));
 
@@ -157,7 +135,7 @@ CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
         !nodeHandle_.getParam("/rectification_matrix/data", data3))
         throw std::runtime_error("Could not initialize rectification matrix");
 
-    data3.resize(rows * cols);
+    //Use memcpy for 2d matrices
     rectification_matrix_ = cv::Mat(rows, cols, CV_64F);
     memcpy(rectification_matrix_.data, data3.data(), data3.size() * sizeof(double));
 
@@ -166,8 +144,9 @@ CameraParameters::CameraParameters(ros::NodeHandle nh) : nodeHandle_(nh) {
         !nodeHandle_.getParam("/projection_matrix/cols", cols) ||
         !nodeHandle_.getParam("/projection_matrix/data", data4))
         throw std::runtime_error("Could not initialize projection matrix");
-    data4.resize(rows * cols);
-//    projection_matrix_ = cv::Mat(rows, cols, CV_64F, &data4[0]);
+
+
+    //Use memcpy for 2d matrices
     projection_matrix_ = cv::Mat(rows, cols, CV_64F);
     memcpy(projection_matrix_.data, data4.data(), data4.size() * sizeof(double));
 }
