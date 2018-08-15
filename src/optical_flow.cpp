@@ -5,8 +5,6 @@
 
 #include <optical_flow.h>
 
-#include "../include/optical_flow.h"
-
 #endif
 
 
@@ -14,17 +12,21 @@
  * Initializes the instance, and its CameraParameters object, initializes subscribers
  * and publishes as well as the H and W matrices
  */
-OpticalFlow::OpticalFlow(ros::NodeHandle nh, std::string image_topic, std::string twist_topic, int filter_size,
-                         double dropped_threshold, int max_points, double deadband, double robot_radius,
-                         double rotation_constant)
-        : nh_(nh), image_transport_(nh), cameraParameters_(nh_), image_topic_(std::move(image_topic)),
-          twist_topic_(std::move(twist_topic)), filter_size_(filter_size), dropped_threshold_(dropped_threshold),
-          max_points_(max_points), deadband_(deadband), robot_radius_(robot_radius),
-          rotation_constant_(rotation_constant) {
+OpticalFlow::OpticalFlow(ros::NodeHandle nh)
+        : nh_(nh), cameraParameters_(nh), image_transport_(nh) {
     try {
+        nh_.param<std::string>("twist_topic", twist_topic_, DEFAULT_TWIST_TOPIC);
+        nh_.param<std::string>("image_topic", image_topic_, DEFAULT_IMAGE_TOPIC);
+        nh_.param<int>("filter_size", filter_size_, FILTER_SIZE);
+        nh_.param<int>("max_points", max_points_, MAX_POINTS);
+        nh_.param<double>("deadband", deadband_, DEADBAND_M);
+        nh_.param<double>("robot_radius", robot_radius_, ROBOT_RADIUS);
+        nh_.param<double>("rotation_constant", rotation_constant_, ROTATION_CONSTANT);
+        nh_.param<double>("dropped_threshold", dropped_threshold_, DROPPED_THRESHOLD);
+
         image_subscriber_ = image_transport_.subscribe(image_topic_, 1, &OpticalFlow::imageCallback, this,
                                                        image_transport::TransportHints("compressed"));
-        twist_publisher_ = nh_.advertise<geometry_msgs::Twist>(twist_topic_, 1);
+        twist_publisher_ = nh_.advertise<geometry_msgs::TwistWithCovarianceStamped>(twist_topic_, 1);
         cv::namedWindow(windowName_, CV_WINDOW_AUTOSIZE);
         std::vector<double> wData{0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0};
         W_ = cv::Mat(3, 3, CV_64F, &wData[0]);
@@ -33,15 +35,18 @@ OpticalFlow::OpticalFlow(ros::NodeHandle nh, std::string image_topic, std::strin
                                   1.683477982667922e-19, 5.30242624981192e-18, 1};
         H_ = cv::Mat(3, 3, CV_64F, &HData[0]);
         previous_timestamp_ = ros::Time::now().toSec();
-        filter_.reserve(filter_size_);
+        filter_.resize(filter_size_);
+        geometry_msgs::TwistWithCovarianceStamped msg_ = geometry_msgs::TwistWithCovarianceStamped();
+
+        msg_.twist.twist.linear.x = 0.0;
+        msg_.twist.twist.linear.y = 0.0;
+        msg_.twist.twist.linear.z = 0.0;
+        msg_.twist.twist.angular.x = 0.0;
+        msg_.twist.twist.angular.y = 0.0;
+        msg_.twist.twist.angular.z = 0.0;
+
         for (int i = 0; i < filter_size_; ++i) {
-            filter_[i] = geometry_msgs::Twist();
-            filter_[i].linear.x = 0.0;
-            filter_[i].linear.y = 0.0;
-            filter_[i].linear.z = 0.0;
-            filter_[i].angular.x = 0.0;
-            filter_[i].angular.y = 0.0;
-            filter_[i].angular.z = 0.0;
+            filter_.emplace_back(msg_);
         }
         filter_counter_ = 0;
 
@@ -74,7 +79,7 @@ OpticalFlow::~OpticalFlow() {
  *  - Uses the iterative Lucas-Kanade method to calculates an optical flow for a sparse feature set using with pyramids. (cv::calcOpticalFlowPyrLK())
  *  - Uses OpticalFlow::feature_motion_estimate() to calculate the estimated motion
  *  - Averages the motion for the stored measurements
- *  - Publishes the estimated motion as a geometry_msgs::Twist message
+ *  - Publishes the estimated motion as a geometry_msgs::TwistWithCovarianceStamped message
  *  - Calculates the epipolar lines (correspondance between the two frames) (cv::computeCorrespondEpilines())
  *  - Draws the tracked features on the RGB image
  *  - Updates the timestamps and tracked feature indices
@@ -132,30 +137,32 @@ void OpticalFlow::imageCallback(const sensor_msgs::ImageConstPtr &image) {
 
 
         //Create new twist msg
-        geometry_msgs::Twist twist_msg;
+        geometry_msgs::TwistWithCovarianceStamped twist_msg;
         current_timestamp_ = ros::Time::now().toSec();
         double t_diff = current_timestamp_ - previous_timestamp_;
-        twist_msg.linear.x = estimated_motion.y / t_diff;
-        twist_msg.angular.z = estimated_motion.x / (2 * M_PI * robot_radius_) * 2 * M_PI * rotation_constant_ / t_diff;
+        twist_msg.twist.twist.linear.x = estimated_motion.y / t_diff;
+        twist_msg.twist.twist.angular.z =
+                estimated_motion.x / (2 * M_PI * robot_radius_) * 2 * M_PI * rotation_constant_ / t_diff;
         //Put it in the filter
         filter_[filter_counter_] = twist_msg;
 
-        twist_msg.linear.x = 0.0;
-        twist_msg.linear.y = 0.0;
-        twist_msg.linear.z = 0.0;
-        twist_msg.angular.x = 0.0;
-        twist_msg.angular.y = 0.0;
-        twist_msg.angular.z = 0.0;
+        twist_msg.twist.twist.linear.x = 0.0;
+        twist_msg.twist.twist.linear.y = 0.0;
+        twist_msg.twist.twist.linear.z = 0.0;
+        twist_msg.twist.twist.angular.x = 0.0;
+        twist_msg.twist.twist.angular.y = 0.0;
+        twist_msg.twist.twist.angular.z = 0.0;
         //Average measurements
         for (int i = 0; i < filter_size_; ++i) {
-            twist_msg.linear.x += filter_[i].linear.x / filter_size_;
-            twist_msg.linear.y += filter_[i].linear.y / filter_size_;
-            twist_msg.angular.x += filter_[i].angular.x / filter_size_;
-            twist_msg.angular.y += filter_[i].angular.y / filter_size_;
-            twist_msg.angular.z += filter_[i].angular.z / filter_size_;
+            twist_msg.twist.twist.linear.x += filter_[i].twist.twist.linear.x / filter_size_;
+            twist_msg.twist.twist.linear.y += filter_[i].twist.twist.linear.y / filter_size_;
+            twist_msg.twist.twist.angular.x += filter_[i].twist.twist.angular.x / filter_size_;
+            twist_msg.twist.twist.angular.y += filter_[i].twist.twist.angular.y / filter_size_;
+            twist_msg.twist.twist.angular.z += filter_[i].twist.twist.angular.z / filter_size_;
         }
 
         //Publish messages
+        twist_msg.header.stamp = ros::Time::now();
         twist_publisher_.publish(twist_msg);
 
         //Update the next position of the filter
@@ -196,15 +203,15 @@ void OpticalFlow::imageCallback(const sensor_msgs::ImageConstPtr &image) {
         previous_timestamp_ = current_timestamp_;
 
     } catch (const ros::Exception &re) {
-        ROS_ERROR("ROS error: &s", re.what());
+        ROS_ERROR("ROS error: %s", re.what());
         std::cerr << "ROS error: " << re.what() << std::endl;
         return;
     } catch (const cv::Exception &cve) {
-        ROS_ERROR("CV error: &s", cve.what());
+        ROS_ERROR("CV error: %s", cve.what());
         std::cerr << "CV error: " << cve.what() << std::endl;
         return;
     } catch (const cv_bridge::Exception &cvbe) {
-        ROS_ERROR("cv_bridge error: &s", cvbe.what());
+        ROS_ERROR("cv_bridge error: %s", cvbe.what());
         std::cerr << "CV error: " << cvbe.what() << std::endl;
         return;
     } catch (...) {
@@ -312,7 +319,7 @@ void OpticalFlow::setImageTopic(std::string image_topic) {
  */
 void OpticalFlow::setTwistTopic(std::string twist_topic) {
     twist_topic_ = std::move(twist_topic);
-    twist_publisher_ = nh_.advertise<geometry_msgs::Twist>(twist_topic_, 1);
+    twist_publisher_ = nh_.advertise<geometry_msgs::TwistWithCovarianceStamped>(twist_topic_, 1);
 }
 
 int OpticalFlow::getFilterSize() const {
@@ -353,7 +360,7 @@ void OpticalFlow::print() {
     std::cout << "Image Height (Pixels): " << cameraParameters_.getHeight() << std::endl;
     std::cout << "Image Width (Pixels): " << cameraParameters_.getWidth() << std::endl;
     std::cout << "Image Topic: " << image_topic_ << std::endl;
-    std::cout << "Twist Topic: " << twist_topic_ << std::endl;
+    std::cout << "TwistWithCovarianceStamped Topic: " << twist_topic_ << std::endl;
     std::cout << "Robot Radius: " << robot_radius_ << std::endl;
     std::cout << "Deadband: " << deadband_ << std::endl;
     std::cout << "Number of Tracked Points: " << max_points_ << std::endl;

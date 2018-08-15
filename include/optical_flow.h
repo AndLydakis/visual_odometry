@@ -37,7 +37,7 @@
 #include <image_transport/image_transport.h>
 
 #include "sensor_msgs/image_encodings.h"
-#include "geometry_msgs/Twist.h"
+#include "geometry_msgs/TwistWithCovarianceStamped.h"
 #include "compressed_image_transport/compressed_subscriber.h"
 #include "compressed_image_transport/compression_common.h"
 
@@ -50,7 +50,7 @@
 
 /**
  * Class that provides a motion estimate between consecutive images. Uses images streamed in a ros topic
- * and publishes a geometry_msgs/Twist message. To be used with other odometry sources such as IMUs.
+ * and publishes a geometry_msgs/TwistWithCovarianceStamped message. To be used with other odometry sources such as IMUs.
  * Heavily based on  <a href="https://github.com/apollack11/advanced-computer-vision">https://github.com/apollack11/advanced-computer-vision</a>
  */
 class OpticalFlow {
@@ -70,15 +70,7 @@ public:
      * @param rotation_constant Constant that is used for the motion calculation, it should be experimentally determined for
      * each platform
      */
-    explicit OpticalFlow(ros::NodeHandle nh,
-                         std::string image_topic = DEFAULT_IMAGE_TOPIC,
-                         std::string twist_topic = DEFAULT_TWIST_TOPIC,
-                         int filter_size = FILTER_SIZE,
-                         double dropped_threshold = DROPPED_THRESHOLD,
-                         int max_points = MAX_POINTS,
-                         double deadband = DEADBAND_M,
-                         double robot_radius = ROBOT_RADIUS,
-                         double rotation_constant = ROTATION_CONSTANT);
+    explicit OpticalFlow(ros::NodeHandle nh);
 
     /**
      * Destructor
@@ -218,7 +210,7 @@ private:
     ///The title of the visualization window
     std::string windowName_ = "Tracked Features";
     ///A vector that stores recent motion estimates
-    std::vector<geometry_msgs::Twist> filter_;
+    std::vector<geometry_msgs::TwistWithCovarianceStamped> filter_;
     ///A CameraParameters instance that stores the used camera attributes
     CameraParameters cameraParameters_;
 
